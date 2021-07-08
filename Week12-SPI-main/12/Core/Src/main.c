@@ -22,7 +22,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,8 +55,13 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 uint16_t ADCin = 0;
 uint64_t _micro = 0;
+
+//12bits dac
 uint16_t dataOut = 0;
-	uint8_t DACConfig = 0b0011;
+//upper 4 bits of dac
+uint8_t DACConfig = 0b0011;
+char TxDataBuffer[32] = { 0 };
+char RxDataBuffer[32] = { 0 };
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -67,6 +74,7 @@ static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM11_Init(void);
 /* USER CODE BEGIN PFP */
+int16_t UARTRecieveIT();
 void MCP4922SetOutput(uint8_t Config, uint16_t DACOutput);
 uint64_t micros();
 /* USER CODE END PFP */
@@ -123,7 +131,7 @@ int main(void)
 	while (1)
 	{
 		static uint64_t timestamp = 0;
-		if (micros() - timestamp > 100)
+		if (micros() - timestamp >= 100)
 		{
 			timestamp = micros();
 			dataOut++;
@@ -259,7 +267,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -293,7 +301,7 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 100;
+  htim3.Init.Prescaler = 99;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 100;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -335,7 +343,7 @@ static void MX_TIM11_Init(void)
 
   /* USER CODE END TIM11_Init 1 */
   htim11.Instance = TIM11;
-  htim11.Init.Prescaler = 100;
+  htim11.Init.Prescaler = 99;
   htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim11.Init.Period = 65535;
   htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -482,6 +490,21 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 inline uint64_t micros()
 {
 	return htim11.Instance->CNT + _micro;
+}
+int16_t UARTRecieveIT() {
+	static uint32_t dataPos = 0;
+	int16_t data = -1;
+	if (huart2.RxXferSize - huart2.RxXferCount != dataPos) {
+		data = RxDataBuffer[dataPos];
+		dataPos = (dataPos + 1) % huart2.RxXferSize;
+	}
+	return data;
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	sprintf(TxDataBuffer, "Received:[%s]\r\n", RxDataBuffer);
+	HAL_UART_Transmit_IT(&huart2, (uint8_t*) TxDataBuffer,
+			strlen(TxDataBuffer));
 }
 /* USER CODE END 4 */
 
